@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temu SK 全托管 利润计算器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+:root {
+  --bg:#F4F2ED; --surface:#fff; --border:#DDD9CC; --border-light:#EDEAE0;
+  --accent:#1B4332; --accent-mid:#2D6A4F; --accent-light:#EBF3EE; --accent-pale:#F4FAF6;
+  --red:#B5311E; --red-light:#FCF0EE; --amber:#92600A; --amber-light:#FEF8ED;
+  --text:#1A1A18; --t2:#5A5A52; --t3:#9A9A8E;
+  --mono:'DM Mono',monospace; --sans:'Noto Sans SC',sans-serif;
+  --r:10px; --rl:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+/* Layout */
+.page{max-width:820px;margin:0 auto;padding:44px 24px 100px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--accent);border:1px solid var(--accent);padding:3px 10px 3px 8px;border-radius:3px;margin-bottom:14px}
+.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);display:block}
+h1{font-size:28px;font-weight:700;letter-spacing:-.025em;margin-bottom:6px}
+.header-sub{font-size:14px;color:var(--t2);font-weight:300;margin-bottom:32px}
+
+/* Tabs */
+.tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:32px;background:var(--border)}
+.tab-btn{flex:1;padding:11px;font-family:var(--sans);font-size:14px;font-weight:500;border:none;cursor:pointer;background:transparent;color:var(--t2);transition:all .15s}
+.tab-btn.active{background:var(--surface);color:var(--accent)}
+
+/* Step label */
+.step-label{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:500;color:var(--t2);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+.step-num{width:22px;height:22px;border-radius:50%;background:var(--accent);color:white;font-family:var(--mono);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Drop zone */
+.drop-zone{position:relative;border:1.5px dashed var(--border);border-radius:var(--rl);background:var(--surface);padding:32px;text-align:center;cursor:pointer;transition:border-color .18s,background .18s;margin-bottom:14px}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent-mid);background:var(--accent-pale)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-icon{font-size:24px;margin-bottom:8px}
+.dz-main{font-size:14px;font-weight:500;margin-bottom:4px}
+.dz-sub{font-size:12px;color:var(--t3)}
+
+/* File list */
+.file-list{display:flex;flex-direction:column;gap:7px;margin-bottom:20px}
+.file-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px}
+.file-icon{font-size:16px;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-meta{font-size:11px;color:var(--t3);margin-top:1px;font-family:var(--mono)}
+.file-region{border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--bg);cursor:pointer;color:var(--text);flex-shrink:0}
+.file-rm{background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;padding:2px 6px;border-radius:4px;flex-shrink:0}
+.file-rm:hover{background:var(--red-light);color:var(--red)}
+.file-item.warn-dup{border-color:#F59E0B;background:#FFFBEB}
+.file-item.warn-month{border-color:#F59E0B;background:#FFFBEB}
+.file-warn-tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#FEF3C7;color:#92600A;border:1px solid #FDE68A;border-radius:4px;padding:2px 8px;margin-top:4px;font-family:var(--mono)}
+.check-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:14px;display:none}
+.check-panel.has-warn{border-color:#F59E0B;background:#FFFBEB;display:block}
+.check-panel.all-ok{border-color:#6EE7B7;background:#F0FDF4;display:block}
+.check-title{font-size:12px;font-weight:500;margin-bottom:8px}
+.check-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border-light)}
+.check-row:last-child{border-bottom:none}
+.check-lbl{color:var(--t2)}
+.check-val{font-family:var(--mono);font-size:11px}
+.check-val.ok{color:#059669}
+.check-val.warn{color:#D97706}
+
+/* Expense */
+.expense-row{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 16px;margin-bottom:20px}
+.expense-label{flex:1;font-size:13px;color:var(--t2)}
+.expense-hint{font-size:11px;color:var(--t3);margin-top:1px}
+.pfx{font-family:var(--mono);font-size:13px;color:var(--t3)}
+.expense-input{border:none;outline:none;background:transparent;font-family:var(--mono);font-size:19px;font-weight:500;color:var(--text);width:120px;text-align:right}
+
+/* Buttons */
+.btn-primary{width:100%;padding:14px;background:var(--accent);color:white;border:none;border-radius:var(--r);font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;letter-spacing:.02em;transition:background .15s;margin-bottom:36px}
+.btn-primary:hover{background:var(--accent-mid)}
+.btn-sm{padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-family:var(--sans);font-size:12px;cursor:pointer;color:var(--t2);transition:all .12s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red);background:var(--red-light)}
+.btn-sm.add{background:var(--accent);color:white;border-color:var(--accent)}
+.btn-sm.add:hover{background:var(--accent-mid)}
+
+/* Error / info */
+.msg{padding:10px 14px;border-radius:var(--r);font-size:13px;line-height:1.5;margin-bottom:14px;display:none}
+.msg.error{background:var(--red-light);border:1px solid #E8B5AE;color:var(--red)}
+.msg.amber{background:var(--amber-light);border:1px solid #E8C97A;color:var(--amber)}
+.msg.green{background:var(--accent-light);border:1px solid #A0C8B0;color:var(--accent)}
+
+/* ── Results ── */
+.results-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+.results-title{font-size:11px;font-weight:500;color:var(--t3);letter-spacing:.08em;text-transform:uppercase}
+.results-period{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.region-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;margin-bottom:16px}
+.rc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
+.rc-head{padding:10px 14px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between}
+.rc-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.rc-orders{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.rc-row{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-bottom:1px solid var(--border-light);font-size:12px}
+.rc-row:last-child{border-bottom:none}
+.rc-lbl{color:var(--t2)}
+.rc-val{font-family:var(--mono);font-weight:500;font-size:12px}
+.rc-val.neg{color:var(--red)}
+.rc-gross{background:var(--accent-light);padding:8px 14px;display:flex;justify-content:space-between;align-items:center}
+.rc-gross-lbl{font-size:12px;font-weight:500;color:var(--accent)}
+.rc-gross-right{display:flex;align-items:center;gap:7px}
+.rc-rate{font-family:var(--mono);font-size:10px;color:var(--accent-mid);border:1px solid var(--accent-mid);border-radius:20px;padding:1px 7px}
+.rc-gross-val{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent)}
+.totals-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:14px;margin-bottom:14px}
+.ti{text-align:center}
+.ti-lbl{font-size:11px;color:var(--t3);margin-bottom:4px}
+.ti-val{font-family:var(--mono);font-size:17px;font-weight:500}
+.ti-val.pos{color:var(--accent-mid)}
+.ti-val.neg{color:var(--red)}
+.divider{border:none;border-top:1.5px dashed var(--border);margin:20px 0}
+.sum-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:16px}
+.sum-metric{background:var(--bg);border-radius:var(--r);padding:10px 12px}
+.sum-metric-lbl{font-size:11px;color:var(--t2);margin-bottom:4px}
+.sum-metric-val{font-size:18px;font-weight:500;color:var(--text)}
+.sum-metric-val.pos{color:var(--accent-mid)}
+.sum-metric-val.neg{color:var(--red)}
+.sum-section-title{font-size:11px;font-weight:500;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin:16px 0 8px}
+.sum-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.sum-table th{padding:6px 10px;text-align:left;font-size:10px;font-weight:500;color:var(--t2);letter-spacing:.04em;text-transform:uppercase;border-bottom:0.5px solid var(--border)}
+.sum-table th:not(:first-child){text-align:right}
+.sum-table td{padding:6px 10px;border-bottom:0.5px solid var(--border-light);color:var(--text)}
+.sum-table td:not(:first-child){text-align:right;font-family:var(--mono);font-size:11px}
+.sum-table tr:last-child td{border-bottom:none}
+.sum-table tr:hover td{background:var(--bg)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;font-size:9px;font-weight:500;margin-right:5px;flex-shrink:0;vertical-align:middle}
+.rank-1{background:#FEF3C7;color:#92600A}
+.rank-2{background:#F1F0EF;color:#5A5A52}
+.rank-3{background:#FEF0E8;color:#92450A}
+.rank-n{background:var(--bg);color:var(--t3)}
+.tag-pos{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:500;background:var(--accent-light);color:var(--accent)}
+.tag-high{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#EFF6FF;color:#1D4ED8}
+.tag-warn{display:inline-block;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:500;background:var(--amber-light);color:var(--amber)}
+.insight-row{background:var(--bg);border-radius:var(--r);padding:10px 14px;margin-bottom:7px;font-size:12px;line-height:1.6;color:var(--t2)}
+.insight-row strong{color:var(--text);font-weight:500}
+.region-bar-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border-light)}
+.region-bar-row:last-child{border-bottom:none}
+.rbn{width:44px;font-size:12px;color:var(--t2)}
+.rbw{flex:1;background:var(--border-light);border-radius:3px;height:7px;overflow:hidden}
+.rbf{height:100%;border-radius:3px}
+.rbs{font-size:11px;font-family:var(--mono);color:var(--t2);min-width:120px;text-align:right}
+.final-card{border:1.5px solid var(--accent);border-radius:var(--rl);overflow:hidden;margin-bottom:12px}
+.final-head{background:var(--accent);color:white;padding:10px 16px;font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase}
+.final-row{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border-light);font-size:13px;background:var(--surface)}
+.final-row:last-child{border-bottom:none}
+.final-lbl{color:var(--t2)}
+.final-val{font-family:var(--mono);font-weight:500}
+.final-val.neg{color:var(--red)}
+.final-bottom{background:var(--accent);padding:16px;display:flex;justify-content:space-between;align-items:center}
+.final-bottom-lbl{color:rgba(255,255,255,.75);font-size:13px}
+.final-bottom-val{font-family:var(--mono);font-size:24px;font-weight:500;color:white}
+
+/* ── Cost Editor ── */
+.cost-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.search-input{flex:1;min-width:160px;border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;font-family:var(--sans);font-size:13px;background:var(--surface);outline:none;color:var(--text)}
+.search-input:focus{border-color:var(--accent-mid)}
+.cost-count{font-size:12px;color:var(--t3);font-family:var(--mono);white-space:nowrap}
+
+.cost-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{background:var(--bg);border-bottom:1px solid var(--border)}
+th{padding:9px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--t2);letter-spacing:.04em;text-transform:uppercase}
+th:not(:first-child){text-align:right}
+td{padding:7px 12px;border-bottom:1px solid var(--border-light);vertical-align:middle}
+td:not(:first-child){text-align:right}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#FAFAF7}
+.td-id{font-family:var(--mono);font-size:11px;color:var(--t3)}
+.td-name{font-weight:500;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inline-input{border:1px solid transparent;border-radius:5px;padding:3px 7px;font-family:var(--mono);font-size:13px;width:80px;text-align:right;background:transparent;outline:none;color:var(--text)}
+.inline-input:hover{border-color:var(--border)}
+.inline-input:focus{border-color:var(--accent-mid);background:var(--accent-pale)}
+.name-input{width:100%;border:1px solid transparent;border-radius:5px;padding:3px 7px;font-family:var(--sans);font-size:13px;background:transparent;outline:none;color:var(--text)}
+.name-input:hover{border-color:var(--border)}
+.name-input:focus{border-color:var(--accent-mid);background:var(--accent-pale)}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--t3);font-size:14px;padding:2px 6px;border-radius:4px}
+.del-btn:hover{color:var(--red);background:var(--red-light)}
+
+/* Add row form */
+.add-form{background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:var(--rl);padding:16px;margin-bottom:14px;display:none}
+.add-form.open{display:block}
+.add-form-title{font-size:13px;font-weight:500;color:var(--accent);margin-bottom:12px}
+.add-grid{display:grid;grid-template-columns:1fr 1fr 100px 100px auto;gap:8px;align-items:end}
+.form-field label{display:block;font-size:11px;color:var(--t2);margin-bottom:4px}
+.form-input{width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-family:var(--mono);font-size:13px;background:var(--surface);outline:none;color:var(--text)}
+.form-input:focus{border-color:var(--accent-mid)}
+.save-bar{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.save-status{font-size:12px;color:var(--t3);font-family:var(--mono)}
+.shop-switcher{display:flex;align-items:center;gap:8px;margin-bottom:28px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)}
+.shop-switcher-label{font-size:12px;color:var(--t2);margin-right:4px;flex-shrink:0}
+.shop-btn{flex:1;padding:7px 12px;border:1px solid var(--border);border-radius:6px;background:transparent;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;color:var(--t2);transition:all .15s;text-align:center}
+.shop-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
+.shop-btn:not(.active):hover{border-color:var(--accent-mid);color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="badge">SK 全托管</div>
+<h1 id="mainTitle">利润计算器</h1>
+<p class="header-sub">SK 全托管 · 多区域结算 · 自动核算成本</p>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('calc')">📊 计算利润</button>
+  <button class="tab-btn" onclick="showTab('cost')">📋 管理成本</button>
+</div>
+
+<!-- ════════════════ TAB: 计算 ════════════════ -->
+<div id="tab-calc">
+
+  <div class="step-label"><div class="step-num">1</div>上传结算文件（可多个）</div>
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+    <div class="dz-icon">📂</div>
+    <div class="dz-main">拖入或点击上传</div>
+    <div class="dz-sub">Temu 后台原始结算文件 · 美国 / 欧区 / 全球均可 · 支持多选</div>
+  </div>
+  <div class="file-list" id="fileList"></div>
+  <div class="check-panel" id="checkPanel"></div>
+
+  <div class="step-label"><div class="step-num">2</div>本月支出</div>
+  <div class="expense-row">
+    <div><div class="expense-label">本月总支出</div><div class="expense-hint">仓储 / 罚款 / 其他（所有区域合计）</div></div>
+    <div style="display:flex;align-items:center;gap:5px"><span class="pfx">¥</span><input class="expense-input" type="number" id="expense" placeholder="0.00" min="0" step="0.01"></div>
+  </div>
+
+  <div class="msg error" id="calcError"></div>
+  <button class="btn-primary" onclick="calculate()">计算当月总利润</button>
+
+  <div id="results" style="display:none">
+    <div class="results-head">
+      <div class="results-title">各区域明细</div>
+      <div class="results-period" id="periodLabel"></div>
+    </div>
+    <div class="region-cards" id="regionCards"></div>
+    <div class="totals-bar" id="totalsBar"></div>
+    <div class="divider"></div>
+    <div class="final-card">
+      <div class="final-head">最终利润推导（所有区域合计）</div>
+      <div class="final-row"><span class="final-lbl">总毛利润</span><span class="final-val" id="f-gross">—</span></div>
+      <div class="final-row"><span class="final-lbl">支出</span><span class="final-val neg" id="f-expense">—</span></div>
+      <div class="final-row"><span class="final-lbl">退货损失（按成本/售价比推算，全部弃置）</span><span class="final-val" id="f-refund-raw">—</span></div>
+      <div class="final-row"><span class="final-lbl">退货实际损失</span><span class="final-val neg" id="f-refund70">—</span></div>
+      <div class="final-bottom">
+        <span class="final-bottom-lbl">当月净利润</span>
+        <span class="final-bottom-val" id="f-net">—</span>
+      </div>
+    </div>
+    <div class="msg amber" id="unmatchedMsg"></div>
+    <div class="msg amber" id="subsidyMsg"></div>
+    <div id="summarySection" style="display:none;margin-top:20px">
+      <div style="border-top:1.5px dashed var(--border);margin-bottom:20px"></div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:500;color:var(--t3);letter-spacing:.08em;text-transform:uppercase">销售总结</div>
+        <div style="font-size:11px;color:var(--t3);font-family:var(--mono)" id="summaryPeriod"></div>
+      </div>
+      <div id="summaryContent"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════ TAB: 成本管理 ════════════════ -->
+<div id="tab-cost" style="display:none">
+
+  <div class="cost-toolbar">
+    <input class="search-input" type="text" id="searchInput" placeholder="搜索 SKU ID 或产品名称..." oninput="renderCostTable()">
+    <span class="cost-count" id="costCount"></span>
+    <button class="btn-sm add" onclick="toggleAddForm()">+ 新增 SKU</button>
+    <button class="btn-sm" onclick="exportCostCSV()">导出 CSV</button>
+  </div>
+
+  <!-- Add form -->
+  <div class="add-form" id="addForm">
+    <div class="add-form-title">新增 SKU 成本</div>
+    <div class="add-grid">
+      <div class="form-field"><label>SKU ID（必填）</label><input class="form-input" id="add-id" placeholder="如：9584573383" type="text"></div>
+      <div class="form-field"><label>产品名称</label><input class="form-input" id="add-name" placeholder="如：6x9in/15x22cm"></div>
+      <div class="form-field"><label>采购成本 ¥</label><input class="form-input" id="add-cost" placeholder="0.00" type="number" min="0" step="0.01"></div>
+      <div class="form-field"><label>打包费用 ¥</label><input class="form-input" id="add-pkg" placeholder="0.00" type="number" min="0" step="0.01"></div>
+      <div class="form-field"><label>&nbsp;</label><button class="btn-sm add" onclick="addSku()" style="width:100%;padding:7px">确认添加</button></div>
+    </div>
+    <div class="msg error" id="addError" style="margin-top:10px"></div>
+  </div>
+
+  <div class="msg error" id="costError"></div>
+  <div class="msg green" id="costSuccess"></div>
+
+  <div class="cost-table-wrap">
+    <table>
+      <thead><tr>
+        <th>SKU ID</th>
+        <th style="text-align:left">产品名称</th>
+        <th>采购成本 ¥</th>
+        <th>打包费用 ¥</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="costTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="save-bar">
+    <span class="save-status" id="saveStatus"></span>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sm" onclick="forceReloadFromDefault()" style="border-color:#185FA5;color:#185FA5">强制同步默认数据到云端</button>
+      <button class="btn-sm danger" onclick="resetToDefault()">恢复出厂默认</button>
+    </div>
+  </div>
+
+</div>
+</div><!-- end .page -->
+
+<script>
+// ══════════════════════════════════════════════
+// 默认成本数据
+// ══════════════════════════════════════════════
+const DEFAULT_OZ_COST_LIST = [{"id":"81233988662","name":"Yellow-13x19cm","cost":3.6,"pkg":0.8},{"id":"54044705595","name":"Yellow-15x22cm","cost":4.2,"pkg":0.8},{"id":"70743099568","name":"","cost":3.0,"pkg":0.0},{"id":"89244672628","name":"","cost":5.0,"pkg":0.0},{"id":"9042846295","name":"Blue-26x33cm","cost":12.55,"pkg":0.8},{"id":"3176319033","name":"Blue-15x22cm","cost":5.05,"pkg":0.8},{"id":"4273181217","name":"Blue-20x29cm","cost":8.8,"pkg":0.8},{"id":"1975762114","name":"029-Bird-4Pack","cost":25.8,"pkg":0.8},{"id":"34821898019","name":"","cost":13.5,"pkg":0.0},{"id":"36053360482","name":"","cost":5.0,"pkg":0.0},{"id":"94524877409","name":"","cost":6.0,"pkg":0.0},{"id":"96253413071","name":"","cost":10.0,"pkg":0.0},{"id":"37842116233","name":"","cost":8.0,"pkg":0.0},{"id":"97665274534","name":"","cost":6.0,"pkg":0.0},{"id":"87595293141","name":"","cost":3.48,"pkg":0.0},{"id":"79944951119","name":"","cost":3.48,"pkg":0.0},{"id":"58617153644","name":"","cost":58.0,"pkg":0.0},{"id":"9174715016","name":"Purple-Assorted","cost":10.4,"pkg":1.5},{"id":"27863556828","name":"100pcs set of [30x30cm]","cost":15.0,"pkg":0.0},{"id":"40023050128","name":"","cost":13.5,"pkg":0.0},{"id":"42352510805","name":"","cost":27.0,"pkg":0.0},{"id":"11181792757","name":"","cost":11.2,"pkg":0.0},{"id":"70737499701","name":"","cost":5.6,"pkg":0.0},{"id":"36550910240","name":"","cost":19.0,"pkg":2.0},{"id":"54723750689","name":"","cost":30.0,"pkg":0.0},{"id":"58986161018","name":"","cost":13.5,"pkg":0.0},{"id":"74282802143","name":"Bubble-Daisies-6x9in","cost":4.35,"pkg":0.0},{"id":"99256417813","name":"Bubble-Daisies-8x10in","cost":4.35,"pkg":0.0},{"id":"57934103094","name":"","cost":3.0,"pkg":0.8},{"id":"70182767230","name":"","cost":3.2,"pkg":0.8},{"id":"95211056392","name":"","cost":3.8,"pkg":0.8},{"id":"16483718719","name":"","cost":11.3,"pkg":0.8},{"id":"43874635034","name":"","cost":18.5,"pkg":0.0},{"id":"53930838232","name":"","cost":18.5,"pkg":0.0},{"id":"15946338738","name":"","cost":18.5,"pkg":0.0},{"id":"82992544951","name":"","cost":18.5,"pkg":0.0},{"id":"63943354116","name":"","cost":13.5,"pkg":0.0},{"id":"6010546835","name":"","cost":25.12,"pkg":0.0},{"id":"8507803897","name":"","cost":25.12,"pkg":0.0},{"id":"4790636735","name":"","cost":25.12,"pkg":0.0},{"id":"8814269773","name":"","cost":18.5,"pkg":0.0},{"id":"4280601910","name":"","cost":18.5,"pkg":0.0},{"id":"4096904894","name":"","cost":13.5,"pkg":0.0},{"id":"5535422104","name":"","cost":18.5,"pkg":0.0},{"id":"4196702219","name":"","cost":18.5,"pkg":0.0},{"id":"4336380352","name":"","cost":18.5,"pkg":0.0},{"id":"9326757137","name":"","cost":4.2,"pkg":0.8},{"id":"8128916734","name":"","cost":7.2,"pkg":0.8},{"id":"5469987278","name":"","cost":10.2,"pkg":0.8},{"id":"3314387352","name":"","cost":18.5,"pkg":0.0},{"id":"66157650728","name":"","cost":10.16,"pkg":0.0},{"id":"83601581331","name":"","cost":11.51,"pkg":0.0},{"id":"4310548769","name":"","cost":279.0,"pkg":0.0},{"id":"2063707192","name":"","cost":279.0,"pkg":0.0},{"id":"78383255114","name":"","cost":10.5,"pkg":0.0},{"id":"75014057594","name":"Mixed Color","cost":5.5,"pkg":0.0},{"id":"24821102423","name":"OZ-15x15-100pcs","cost":4.0,"pkg":0.0},{"id":"91834882867","name":"Mixed colors-240pcs","cost":1.85,"pkg":0},{"id":"59204409665","name":"100pcs set of [35x35cm]","cost":17.0,"pkg":0},{"id":"23472250763","name":"100pcs set of [40x40cm]","cost":26.0,"pkg":0},{"id":"39993296347","name":"Red+Green-20pcs","cost":4.56,"pkg":0},{"id":"35747296940","name":"Mixed Color-50pcs","cost":6.63,"pkg":0},{"id":"78192332986","name":"Mixed Color-30pcs","cost":3.52,"pkg":0},{"id":"67325488197","name":"OZ-15x20-100pcs","cost":5.0,"pkg":0},{"id":"91569660118","name":"OZ-20x30-100pcs","cost":10.0,"pkg":0},{"id":"47909960945","name":"Beige-23 Pack","cost":2.4,"pkg":0},{"id":"65365335129","name":"OZ-15x25-100pcs","cost":6.0,"pkg":0}];
+
+// ── 店铺状态 ──
+let currentShop = 'sk';
+const STORAGE_KEY_SK = 'temu_cost_list_sk_v1';
+function getStorageKey() { return STORAGE_KEY_SK; }
+function getDefaultList() { return JSON.parse(JSON.stringify(DEFAULT_COST_LIST)); }
+function switchShop(shop) { /* single shop mode */ }
+
+const DEFAULT_COST_LIST = [{"id":"1857016245","name":"20Purple+Blue-10x14","cost":10.2,"pkg":0.8},{"id":"9342408095","name":"20Purple+Blue-6X9","cost":4.2,"pkg":0.8},{"id":"6310474639","name":"20Purple+Blue-8x11","cost":7.2,"pkg":0.8},{"id":"8259956007","name":"Black-26x33cm","cost":10.2,"pkg":0.8},{"id":"7994971566","name":"Black-13x19cm","cost":3.6,"pkg":0.8},{"id":"1382414497","name":"Black-15x22cm","cost":4.2,"pkg":0.8},{"id":"1556559254","name":"Black-20x29cm","cost":7.2,"pkg":0.8},{"id":"5723460914","name":"Turquoise-26x33cm","cost":10.2,"pkg":0.8},{"id":"6929084666","name":"Turquoise-15x22cm","cost":4.2,"pkg":0.8},{"id":"3180268702","name":"Turquoise-20x29cm","cost":7.2,"pkg":0.8},{"id":"5936034745","name":"Pink-26x33cm","cost":10.2,"pkg":0.8},{"id":"2257042547","name":"Pink-13x19cm","cost":3.6,"pkg":0.8},{"id":"6110686908","name":"Pink-15x22cm","cost":4.2,"pkg":0.8},{"id":"4218911728","name":"Pink-20x29cm","cost":7.2,"pkg":0.8},{"id":"3608100506","name":"4x8in/10x20cm","cost":5.1,"pkg":1.5},{"id":"9584573383","name":"6x9in/15x22cm","cost":6.6,"pkg":1.5},{"id":"5689133495","name":"7x10in/18x27cm","cost":9.0,"pkg":1.5},{"id":"4736070453","name":"8x11.5in/20x29cm","cost":11.1,"pkg":1.5},{"id":"3928306432","name":"","cost":10.2,"pkg":0.8},{"id":"5838951245","name":"Purple-15x22cm","cost":4.2,"pkg":0.8},{"id":"3489591349","name":"Purple-20x29cm","cost":7.2,"pkg":0.8},{"id":"8188131674","name":"Blue-10x14in/26x33cm","cost":10.2,"pkg":0.8},{"id":"8653107367","name":"Blue-5x7.5in/13x19cm","cost":3.6,"pkg":0.8},{"id":"4248613500","name":"Blue-6x9in/15x22cm","cost":4.2,"pkg":0.8},{"id":"9004184859","name":"Blue-8x11in/20x29cm","cost":7.2,"pkg":0.8},{"id":"9063302633","name":"2Colors-Bubble-10x14","cost":10.2,"pkg":0.8},{"id":"4563901061","name":"2Colors-Bubble-6X9","cost":4.2,"pkg":0.8},{"id":"7033320275","name":"2Colors-Bubble-8x11","cost":7.2,"pkg":0.8},{"id":"9847983879","name":"Peachpuff-26x33cm","cost":10.2,"pkg":0.8},{"id":"7890583325","name":"Peachpuff-15x22cm","cost":4.2,"pkg":0.8},{"id":"7601531295","name":"Peachpuff-20x29cm","cost":7.2,"pkg":0.8},{"id":"4185704621","name":"Black-30PC","cost":11.1,"pkg":1.5},{"id":"7912961094","name":"Black-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"6292235812","name":"Black-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"1158932919","name":"Black-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"8990501772","name":"Pink100Assorted","cost":19.0,"pkg":2.0},{"id":"21587962494","name":"purple-13x19cm","cost":3.04,"pkg":0.8},{"id":"25800176885","name":"purple-15x22cm","cost":3.52,"pkg":0.8},{"id":"9916224638","name":"20Pink+Black-10x14","cost":10.2,"pkg":0.8},{"id":"7173849612","name":"20Pink+Black-8x11","cost":7.2,"pkg":0.8},{"id":"2333540725","name":"Pink-30PC","cost":11.1,"pkg":1.5},{"id":"35309373697","name":"Green-6*9in 100pcs","cost":18.5,"pkg":1.5},{"id":"55680065834","name":"Green-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"33187778124","name":"Green-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"93149536508","name":"Green-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"5859350129","name":"Purple-30pcs","cost":11.1,"pkg":1.5},{"id":"2519828677","name":"Purple-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"2753738404","name":"Purple-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"4489297272","name":"Purple-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"79402084042","name":"Green Daisy","cost":3.4,"pkg":0.0},{"id":"4565518841","name":"BlackStar100-10x13","cost":35.0,"pkg":0.0},{"id":"9787106434","name":"Pinkstar100","cost":35.0,"pkg":0.0},{"id":"82689512573","name":"Pink Christmas-30pcs","cost":13.5,"pkg":0.0},{"id":"1026666913","name":"Black100Assorted","cost":19.0,"pkg":2.0},{"id":"5201260918","name":"10x13in/25x34cm","cost":15.6,"pkg":1.5},{"id":"1607313211","name":"4x7.5in/11x19cm","cost":5.1,"pkg":1.5},{"id":"7839075015","name":"6x9in/15x22cm","cost":6.6,"pkg":1.5},{"id":"1316484654","name":"7x11in/18x27cm","cost":9.0,"pkg":1.5},{"id":"4934564961","name":"8x11.5in/20x29cm","cost":11.1,"pkg":1.5},{"id":"2185739848","name":"Blue-6*9in 100pcs","cost":18.5,"pkg":1.5},{"id":"5949882594","name":"Blue-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"6723597985","name":"Blue-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"1331843320","name":"Blue-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"57620151428","name":"Green-6*9in 100pcs","cost":18.5,"pkg":1.5},{"id":"56776336380","name":"Green-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"78605207759","name":"Green-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"21115487952","name":"Green-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"36211631754","name":"Peachpuff-100Assorted","cost":19.0,"pkg":2.0},{"id":"1363553322","name":"Bubble-Daisies-8x10in","cost":9.2,"pkg":0.8},{"id":"5148260440","name":"Green100Assorted","cost":19.0,"pkg":2.0},{"id":"14983493379","name":"20Pink+Green-6X9","cost":4.2,"pkg":0.8},{"id":"76073773508","name":"20Pink+Green-8x11","cost":5.8,"pkg":0.8},{"id":"3136967071","name":"","cost":15.6,"pkg":1.5},{"id":"4416670513","name":"4x7.5in/11x19cm","cost":5.1,"pkg":1.5},{"id":"2442731442","name":"","cost":6.6,"pkg":1.5},{"id":"8841413910","name":"7x11in/18x27cm","cost":9.0,"pkg":1.5},{"id":"8719531428","name":"","cost":11.1,"pkg":1.5},{"id":"8188320236","name":"Pink-6*9in 100pcs","cost":18.5,"pkg":1.5},{"id":"4310424420","name":"Pink-6*9in 200pcs","cost":37.0,"pkg":3.0},{"id":"8013992855","name":"Pink-7*10in 100pcs","cost":26.5,"pkg":1.5},{"id":"4472101332","name":"Pink-7*10in 200pcs","cost":53.0,"pkg":3.0},{"id":"50433942857","name":"","cost":33.15,"pkg":0.0},{"id":"91427451937","name":"","cost":13.5,"pkg":0.0},{"id":"7359902661","name":"20Pink+Blue-10x14","cost":10.2,"pkg":0.8},{"id":"9108890007","name":"20Pink+Blue-6X9","cost":4.2,"pkg":0.8},{"id":"1533040855","name":"20Pink+Blue-8x11","cost":7.2,"pkg":0.8},{"id":"4774591155","name":"","cost":15.6,"pkg":1.5},{"id":"4841648362","name":"","cost":5.1,"pkg":1.5},{"id":"4745240597","name":"","cost":6.6,"pkg":1.5},{"id":"8123469642","name":"","cost":9.0,"pkg":1.5},{"id":"5645021384","name":"","cost":11.1,"pkg":1.5},{"id":"6577837801","name":"","cost":11.1,"pkg":1.5},{"id":"4302245405","name":"Blue-26x33cm","cost":10.2,"pkg":0.8},{"id":"8001046619","name":"Blue-15x22cm","cost":4.2,"pkg":0.8},{"id":"6005051934","name":"Blue-20x29cm","cost":7.2,"pkg":0.8},{"id":"22427566728","name":"Pink Christmas-100pcs","cost":30.0,"pkg":0.0},{"id":"21217093283","name":"","cost":5.6,"pkg":0.0},{"id":"55244473287","name":"","cost":13.5,"pkg":0.0},{"id":"67306101434","name":"","cost":5.0,"pkg":0.0},{"id":"89212963443","name":"OZ-15x25-100pcs","cost":6.0,"pkg":0.0},{"id":"74732281422","name":"OZ-20x30-100pcs","cost":10.0,"pkg":0.0},{"id":"70066255592","name":"OZ-20x25-100pcs","cost":8.0,"pkg":0.0},{"id":"14642359866","name":"OZ-18x20-100pcs","cost":6.0,"pkg":0.0},{"id":"4828106637","name":"","cost":7.0,"pkg":1.0},{"id":"72451726921","name":"OZ-8x8-100pcs","cost":2.0,"pkg":0.0},{"id":"27047244416","name":"","cost":2.0,"pkg":0.0},{"id":"77788709503","name":"OZ-15x15-100pcs","cost":4.0,"pkg":0.0},{"id":"63982371670","name":"","cost":7.0,"pkg":0.0},{"id":"83527056723","name":"Blue100Assorted","cost":19.0,"pkg":2.0},{"id":"30241970949","name":"Bubble-Purple Flower-50pcs","cost":26.0,"pkg":1.0},{"id":"1285517258","name":"","cost":15.6,"pkg":1.5},{"id":"6954962798","name":"","cost":5.1,"pkg":1.5},{"id":"1065230166","name":"","cost":6.6,"pkg":1.5},{"id":"6635145554","name":"","cost":9.0,"pkg":1.5},{"id":"7321988854","name":"","cost":11.1,"pkg":1.5},{"id":"3081505275","name":"Purple100Assorted","cost":19.0,"pkg":2.0},{"id":"7972179255","name":"Blue-Green-30PC","cost":11.1,"pkg":1.5},{"id":"73303225606","name":"","cost":2.0,"pkg":0.0},{"id":"5283928881","name":"Flowers-A-3PC","cost":18.5,"pkg":0.0},{"id":"3379239419","name":"","cost":33.17,"pkg":0.0},{"id":"3994018801","name":"","cost":33.17,"pkg":0.0},{"id":"3006040388","name":"","cost":33.17,"pkg":0.0},{"id":"5738948697","name":"","cost":33.17,"pkg":0.0},{"id":"8217122390","name":"","cost":33.17,"pkg":0.0},{"id":"7094869636","name":"","cost":33.17,"pkg":0.0},{"id":"73130596367","name":"","cost":5.4,"pkg":0.0},{"id":"91037251734","name":"","cost":13.5,"pkg":0.0},{"id":"92807789661","name":"","cost":13.5,"pkg":0.0},{"id":"9486781689","name":"","cost":3.6,"pkg":0.8},{"id":"85812938110","name":"","cost":13.5,"pkg":0.0},{"id":"25631858591","name":"Daisies-6x9in-50pcs","cost":8.7,"pkg":0.0},{"id":"62297303723","name":"OC001-B","cost":13.5,"pkg":0.0},{"id":"36895155541","name":"","cost":15.0,"pkg":0.0},{"id":"98768134404","name":"","cost":20.8,"pkg":2.0},{"id":"80969368289","name":"","cost":8.8,"pkg":2.0},{"id":"15036386017","name":"","cost":14.8,"pkg":2.0},{"id":"34029129924","name":"","cost":20.8,"pkg":2.0},{"id":"93763833337","name":"","cost":8.8,"pkg":2.0},{"id":"17410536082","name":"","cost":14.8,"pkg":2.0},{"id":"88288452082","name":"","cost":13.5,"pkg":0.0},{"id":"79740625454","name":"","cost":13.5,"pkg":0.0},{"id":"79900882426","name":"","cost":13.5,"pkg":0.0},{"id":"64629020070","name":"","cost":13.5,"pkg":0.0},{"id":"18905764123","name":"","cost":13.5,"pkg":0.0},{"id":"10172707309","name":"","cost":13.5,"pkg":0.0},{"id":"31439114709","name":"","cost":13.5,"pkg":0.0},{"id":"59909175055","name":"","cost":13.5,"pkg":0.0},{"id":"81036407661","name":"","cost":13.5,"pkg":0.0},{"id":"57836250236","name":"","cost":13.5,"pkg":0.0},{"id":"77144053906","name":"","cost":13.5,"pkg":0.0},{"id":"95034118515","name":"","cost":13.5,"pkg":0.0},{"id":"79948640443","name":"Mixed Color","cost":5.5,"pkg":0}];
+
+// ── GitHub Gist 云端配置 ──
+const GITHUB_TOKEN = ['ghp_YlktWVux','Le90uxeNHVb3','klsuRGRsIf3GpGhJ'].join('');
+const GIST_ID = 'f5e3b48addacfdbe2eac7c7502e2ff3a';
+const GIST_FILE = 'sk-cost-list.json';
+const EXPECTED_SKU_COUNT = 152;
+function getGistId()   { return GIST_ID; }
+function getGistFile() { return GIST_FILE; }
+
+// ── 云端读取 ──
+async function loadCostList() {
+  showSaveStatus('正在从云端加载成本数据...');
+  try {
+    const res = await fetch('https://api.github.com/gists/' + getGistId(), {
+      headers: {
+        'Authorization': 'token ' + GITHUB_TOKEN,
+        'Accept': 'application/vnd.github.v3+json',
+      }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const raw = data.files[getGistFile()].content;
+    const list = JSON.parse(raw);
+    // 验证云端数据是否属于当前店铺
+    const expectedCount = 152;
+    const isWrongData = Array.isArray(list) && list.length > 0 &&
+      Math.abs(list.length - expectedCount) > 20; // 数量差太多说明数据混了
+    // 若云端是空的、占位符、或数据属于错误的店铺，用正确的默认数据初始化
+    if (!Array.isArray(list) || list.length === 0 ||
+        (list.length === 1 && Object.keys(list[0]).length === 0) ||
+        isWrongData) {
+      const defaultList = currentShop === 'sk'
+        ? JSON.parse(JSON.stringify(DEFAULT_COST_LIST))
+        : JSON.parse(JSON.stringify(DEFAULT_OZ_COST_LIST));
+      await saveCostListData(defaultList);
+      showSaveStatus((currentShop === 'sk' ? 'SK' : 'OZ') + ' 云端数据已初始化 ✓');
+      return defaultList;
+    }
+    showSaveStatus('云端数据已加载 ✓');
+    return list;
+  } catch(e) {
+    console.error('loadCostList error:', e);
+    showSaveStatus('⚠ 云端加载失败，使用本地默认数据');
+    return getDefaultList();
+  }
+}
+
+// ── 实际写入云端 ──
+async function saveCostListData(list) {
+  const body = { files: {} };
+  body.files[getGistFile()] = { content: JSON.stringify(list) };
+  const res = await fetch('https://api.github.com/gists/' + getGistId(), {
+    method: 'PATCH',
+    headers: {
+      'Authorization': 'token ' + GITHUB_TOKEN,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('Save failed: ' + res.status);
+}
+
+// ── 保存（带防抖，避免每次按键都请求） ──
+let saveTimer = null;
+function saveCostList() {
+  showSaveStatus('待保存...');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await saveCostListData(costList);
+      showSaveStatus('已同步到云端 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}));
+    } catch(e) {
+      showSaveStatus('⚠ 云端保存失败，请检查网络');
+    }
+  }, 800);
+}
+
+function getCostMap() {
+  const m = {};
+  costList.forEach(s => { if (s.id) m[s.id] = s; });
+  return m;
+}
+
+let costList = [];
+
+// ── 页面启动时从云端加载数据 ──
+(async () => {
+  try {
+    costList = await loadCostList();
+    document.getElementById('costStatus').textContent = '当前：SK 全托管（' + costList.length + ' 个SKU）';
+  } catch(e) {
+    costList = getDefaultList();
+    document.getElementById('costStatus').textContent = '⚠ 云端加载失败，使用本地数据';
+  }
+})();
+
+// ══════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════
+function showTab(tab) {
+  document.getElementById('tab-calc').style.display = tab === 'calc' ? '' : 'none';
+  document.getElementById('tab-cost').style.display = tab === 'cost' ? '' : 'none';
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (i===0) === (tab==='calc')));
+  if (tab === 'cost') renderCostTable();
+}
+
+// ══════════════════════════════════════════════
+// CALCULATE TAB
+// ══════════════════════════════════════════════
+const files = [];
+const REGION_FLAGS = {'美国':'🇺🇸','欧区':'🇪🇺','全球':'🌐','其他':'📦'};
+const REGION_OPTS = ['美国','欧区','全球','其他'];
+
+// 订单号前缀 → 区域映射（基于Temu平台规律）
+const US_PREFIXES    = new Set(['211','164']);
+const EU_PREFIXES    = new Set(['076','069','210','141','162','098','186','192','079','191','096','050','053','020','184','090','054','113','064','180','151','209','181','032','163','174','108','075','167','013','105','208','165','068','016','175','026','114','102','052','152','132','010','097','126','091','116','130','122','134','147']);
+const GLOBAL_PREFIXES= new Set(['012','037','185','100','144','128','045','057']);
+
+function detectRegionFromOrders(rows) {
+  const counts = { '美国': 0, '欧区': 0, '全球': 0 };
+  rows.filter(r => (r['交易类型']||'').toString().trim() === '销售回款')
+    .forEach(r => {
+      const pfx = String(r['订单编号']||'').slice(0,3);
+      if (US_PREFIXES.has(pfx))     counts['美国']++;
+      else if (EU_PREFIXES.has(pfx)) counts['欧区']++;
+      else if (GLOBAL_PREFIXES.has(pfx)) counts['全球']++;
+    });
+  const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  if (best && best[1] > 0) return { region: best[0], confident: best[1] > 5 };
+  return { region: '其他', confident: false };
+}
+
+function guessRegion(name) {
+  // Fallback: guess from filename only (used before rows are loaded)
+  if (/美国|us|america/i.test(name)) return '美国';
+  if (/欧|eu|europe/i.test(name)) return '欧区';
+  if (/全球|global|world/i.test(name)) return '全球';
+  return '其他';
+}
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); handleFiles(e.dataTransfer.files); });
+document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+
+function handleFiles(list) {
+  [...list].forEach(f => {
+    if (!f.name.match(/\.(xlsx|xls)$/i)) return;
+    if (files.find(x => x.name === f.name)) return;
+    const entry = { name: f.name, rows: null, region: guessRegion(f.name), status: 'loading', meta: '', dateMin: null, dateMax: null, month: null };
+    files.push(entry);
+    renderFileList();
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        entry.rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+        entry.status = 'ok';
+        const hkRows = entry.rows.filter(r => txType(r) === '销售回款');
+        entry.meta = hkRows.length + ' 笔销售回款';
+        // Auto-detect region from order number prefixes
+        const detected = detectRegionFromOrders(entry.rows);
+        if (detected.confident) {
+          entry.region = detected.region;
+          entry.autoDetected = true;
+        } else {
+          entry.autoDetected = false;
+        }
+        // Parse date range
+        const dates = entry.rows.map(r => new Date(r['账务时间'])).filter(d => !isNaN(d));
+        if (dates.length) {
+          entry.dateMin = new Date(Math.min(...dates));
+          entry.dateMax = new Date(Math.max(...dates));
+          entry.month = entry.dateMin.getFullYear() + '-' + String(entry.dateMin.getMonth()+1).padStart(2,'0');
+        }
+      } catch(e) { entry.status = 'error'; entry.meta = '读取失败'; }
+      renderFileList();
+      runChecks();
+    };
+    reader.readAsArrayBuffer(f);
+  });
+}
+
+function removeFile(name) { const i = files.findIndex(f => f.name === name); if (i !== -1) files.splice(i, 1); renderFileList(); runChecks(); }
+function setRegion(name, r) { const f = files.find(f => f.name === name); if (f) { f.region = r; renderFileList(); runChecks(); } }
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return (d.getMonth()+1) + '月' + d.getDate() + '日';
+}
+
+function renderFileList() {
+  const okFiles = files.filter(f => f.status === 'ok');
+  // Detect duplicate regions
+  const regionCount = {};
+  okFiles.forEach(f => { regionCount[f.region] = (regionCount[f.region]||0)+1; });
+  // Detect majority month
+  const monthCount = {};
+  okFiles.forEach(f => { if(f.month) monthCount[f.month]=(monthCount[f.month]||0)+1; });
+  const majorityMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0]?.[0];
+
+  document.getElementById('fileList').innerHTML = files.map(f => {
+    const isDupRegion = f.status==='ok' && regionCount[f.region] > 1;
+    const isWrongMonth = f.status==='ok' && f.month && majorityMonth && f.month !== majorityMonth;
+    const needsRegion = f.status==='ok' && !f.autoDetected && f.region === '其他';
+    const itemClass = (isDupRegion || isWrongMonth || needsRegion) ? 'file-item warn-dup' : 'file-item';
+    const dateStr = f.dateMin ? fmtDate(f.dateMin)+' — '+fmtDate(f.dateMax) : '';
+    const warns = [];
+    if (isDupRegion) warns.push('⚠ 该区域已有文件，可能重复上传');
+    if (isWrongMonth) warns.push('⚠ 月份与其他文件不一致（'+f.month+'）');
+    if (needsRegion) warns.push('⚠ 未能自动识别区域，请在右边手动选择');
+    const warnHtml = warns.map(w=>`<div class="file-warn-tag">${w}</div>`).join('');
+    const autoBadge = f.autoDetected
+      ? `<span style="font-size:10px;background:var(--accent-light);color:var(--accent);border:1px solid #A0C8B0;border-radius:4px;padding:1px 7px;margin-left:6px;font-family:var(--mono)">自动识别</span>`
+      : (f.status==='ok' ? `<span style="font-size:10px;background:#F3F4F6;color:var(--t3);border:1px solid var(--border);border-radius:4px;padding:1px 7px;margin-left:6px;font-family:var(--mono)">手动选择</span>` : '');
+    return `<div class="${itemClass}">
+      <div class="file-icon">${f.status==='loading'?'⏳':f.status==='error'?'❌':'✅'}</div>
+      <div class="file-info">
+        <div class="file-name">${f.name}</div>
+        <div class="file-meta">${f.meta||'读取中...'}${dateStr?' · '+dateStr:''}</div>
+        ${warnHtml}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+        <select class="file-region" onchange="setRegion('${f.name}',this.value)">
+          ${REGION_OPTS.map(r=>`<option value="${r}" ${r===f.region?'selected':''}>${REGION_FLAGS[r]} ${r}</option>`).join('')}
+        </select>
+        ${autoBadge}
+        ${f.status==='ok' && !f.autoDetected ? '<span style="font-size:10px;color:var(--red);font-family:var(--mono)">请选择区域 ↑</span>' : ''}
+      </div>
+      <button class="file-rm" onclick="removeFile('${f.name}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function getOrderSet(file) {
+  // Return a compact fingerprint: sorted first 50 order IDs joined
+  const orders = file.rows
+    .map(r => r['订单编号'])
+    .filter(Boolean)
+    .map(String)
+    .sort();
+  return orders.slice(0, 50).join('|');
+}
+
+function runChecks() {
+  const okFiles = files.filter(f => f.status === 'ok');
+  if (!okFiles.length) { document.getElementById('checkPanel').className='check-panel'; return; }
+
+  const warns = [];
+
+  // Check 1: duplicate regions (same region label)
+  const regionCount = {};
+  okFiles.forEach(f => { regionCount[f.region]=(regionCount[f.region]||0)+1; });
+  Object.entries(regionCount).forEach(([r,n]) => {
+    if (n > 1) warns.push(`「${r}」区域上传了 ${n} 个文件，请确认是否重复上传`);
+  });
+
+  // Check 2: duplicate content (same orders, different file names / regions)
+  const fingerprints = {};
+  okFiles.forEach(f => {
+    const fp = getOrderSet(f);
+    if (fingerprints[fp]) {
+      warns.push(`「${f.region}」和「${fingerprints[fp].region}」的数据完全相同，很可能导出时选错了文件`);
+    } else {
+      fingerprints[fp] = f;
+    }
+  });
+
+  // Check 3: month mismatch
+  const monthCount = {};
+  okFiles.forEach(f => { if(f.month) monthCount[f.month]=(monthCount[f.month]||0)+1; });
+  const months = Object.keys(monthCount);
+  if (months.length > 1) {
+    const majorityMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0][0];
+    okFiles.filter(f => f.month && f.month !== majorityMonth).forEach(f => {
+      warns.push(`「${f.region}」文件月份为 ${f.month}，与其他文件（${majorityMonth}）不一致，请确认`);
+    });
+  }
+
+  // Build check panel rows (date range per file)
+  const rows = okFiles.map(f => {
+    const dateStr = f.dateMin ? fmtDate(f.dateMin)+' — '+fmtDate(f.dateMax) : '无日期数据';
+    const startDay = f.dateMin ? f.dateMin.getDate() : 0;
+    const isIncomplete = startDay > 5;
+    const statusCls = !f.dateMin ? 'warn' : isIncomplete ? 'warn' : 'ok';
+    const statusTxt = !f.dateMin ? '无法判断' : isIncomplete ? '⚠ '+startDay+'号才开始，可能缺少前几天数据' : '✓';
+    return '<div class="check-row">' +
+      '<span class="check-lbl">' + (REGION_FLAGS[f.region]||'📦') + ' ' + f.region + ' · ' + (f.name.length>28?f.name.slice(0,25)+'…':f.name) + '</span>' +
+      '<span class="check-val ' + statusCls + '">' + dateStr + ' · ' + statusTxt + '</span>' +
+      '</div>';
+  }).join('');
+
+  const panel = document.getElementById('checkPanel');
+  const hasWarn = warns.length > 0;
+  panel.className = 'check-panel ' + (hasWarn ? 'has-warn' : 'all-ok');
+  panel.innerHTML =
+    '<div class="check-title">' + (hasWarn ? '⚠️ 发现问题，请检查后再计算' : '✅ 文件检查通过') + '</div>' +
+    warns.map(w => '<div style="font-size:12px;color:var(--amber);margin-bottom:6px">• ' + w + '</div>').join('') +
+    '<div style="font-size:11px;color:var(--t2);margin:' + (hasWarn?'10px':'0') + ' 0 6px;font-weight:500">各文件实际日期范围（请与Temu后台核对）</div>' +
+    rows;
+}
+
+function txType(r) { return (r['交易类型']||'').toString().trim(); }
+function txAmt(r)  { return Number(r['金额'])||0; }
+function txQty(r)  { return Number(r['数量'])||0; }
+function skuKey(v) { if (v==null) return ''; const n=Number(v); return isNaN(n)?String(v).trim():String(Math.round(n)); }
+function fmt(n)    { return '¥'+Math.abs(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function calculate() {
+  const ready = files.filter(f => f.status === 'ok');
+  if (!ready.length) { showMsg('calcError','请先上传至少一个结算文件。'); return; }
+  const unselected = ready.filter(f => !f.autoDetected && f.region === '其他');
+  if (unselected.length) {
+    showMsg('calcError', '⚠ 有 ' + unselected.length + ' 个文件未选择区域：' + unselected.map(f=>f.name).join('、') + '，请先在文件列表中手动选择区域。');
+    return;
+  }
+  hideMsg('calcError');
+  const costMap = getCostMap();
+  const expense = Number(document.getElementById('expense').value)||0;
+  const regionResults = [];
+  const allDates = [];
+  const allUnmatched = {}; // { skuId: skuName }
+  let totalSubsidy = 0;
+
+  // 先建立每个SKU的平均结算单价（所有文件合并）
+  const skuUnitPrice = {}; // skuId -> 平均结算单价
+  ready.forEach(file => {
+    file.rows.filter(r=>txType(r)==='销售回款').forEach(r => {
+      const k = skuKey(r['SKU ID']), qty = txQty(r), amt = txAmt(r);
+      if (!k || qty <= 0) return;
+      if (!skuUnitPrice[k]) skuUnitPrice[k] = { totalAmt: 0, totalQty: 0 };
+      skuUnitPrice[k].totalAmt += amt;
+      skuUnitPrice[k].totalQty += qty;
+    });
+  });
+  // 计算平均单价
+  const skuAvgPrice = {};
+  Object.entries(skuUnitPrice).forEach(([k, v]) => {
+    skuAvgPrice[k] = v.totalQty > 0 ? v.totalAmt / v.totalQty : 0;
+  });
+
+  ready.forEach(file => {
+    const rows = file.rows;
+    const hk = rows.filter(r=>txType(r)==='销售回款');
+    const ch = rows.filter(r=>txType(r)==='销售冲回');
+    const bt = rows.filter(r=>txType(r)==='非商责补贴');
+    const sumHK = hk.reduce((s,r)=>s+txAmt(r),0);
+    const sumCH = ch.reduce((s,r)=>s+txAmt(r),0);
+    const sumBT = bt.reduce((s,r)=>s+txAmt(r),0);
+    const salesTotal = sumHK+sumCH+sumBT;
+
+    // 销售成本
+    let productCost = 0;
+    hk.forEach(r => {
+      const k = skuKey(r['SKU ID']), qty = txQty(r), info = costMap[k];
+      if (info) productCost += info.cost * qty;
+      else if (k && !allUnmatched[k]) allUnmatched[k] = r['SKU货号'] || '';
+    });
+
+    // 退货损失：按成本/售价比推算（弃置假设）
+    // 退货损失 = |退款金额| × (该SKU采购成本 / 该SKU平均结算单价)
+    let returnLoss = 0;
+    ch.forEach(r => {
+      const k = skuKey(r['SKU ID']), amt = Math.abs(txAmt(r));
+      const info = costMap[k];
+      const avgPrice = skuAvgPrice[k];
+      if (info && avgPrice > 0) {
+        returnLoss += amt * (info.cost / avgPrice);
+      } else {
+        // 匹配不到成本或单价，回退到 70% 估算
+        returnLoss += amt * 0.7;
+      }
+    });
+
+    const gross = salesTotal - productCost;
+    totalSubsidy += sumBT;
+    rows.forEach(r => { const d=new Date(r['账务时间']); if(!isNaN(d)) allDates.push(d); });
+    regionResults.push({ region:file.region, flag:REGION_FLAGS[file.region]||'📦', orders:hk.length, sumHK, sumCH, sumBT, salesTotal, productCost, gross, refundAmt:Math.abs(sumCH), returnLoss, margin:salesTotal>0?(gross/salesTotal*100):0 });
+  });
+
+  const totalSales      = regionResults.reduce((s,r)=>s+r.salesTotal,0);
+  const totalCost       = regionResults.reduce((s,r)=>s+r.productCost,0);
+  const totalGross      = regionResults.reduce((s,r)=>s+r.gross,0);
+  const totalRefundAmt  = regionResults.reduce((s,r)=>s+r.refundAmt,0);
+  const totalReturnLoss = regionResults.reduce((s,r)=>s+r.returnLoss,0);
+  const totalNet        = totalGross - expense - totalReturnLoss;
+  const totalOrders = regionResults.reduce((s,r)=>s+r.orders,0);
+  const totalMargin = totalSales>0?(totalGross/totalSales*100):0;
+
+  let period = '';
+  if (allDates.length) {
+    const mn=new Date(Math.min(...allDates)), mx=new Date(Math.max(...allDates));
+    period = `${mn.getFullYear()}年${mn.getMonth()+1}月`;
+    if (mn.getMonth()!==mx.getMonth()) period+=` — ${mx.getMonth()+1}月`;
+  }
+
+  document.getElementById('periodLabel').textContent = period;
+  document.getElementById('regionCards').innerHTML = regionResults.map(r=>`
+    <div class="rc">
+      <div class="rc-head"><div class="rc-name">${r.flag} ${r.region}</div><div class="rc-orders">${r.orders} 笔</div></div>
+      <div class="rc-row"><span class="rc-lbl">销售回款</span><span class="rc-val">${fmt(r.sumHK)}</span></div>
+      <div class="rc-row"><span class="rc-lbl">销售冲回</span><span class="rc-val neg">${r.sumCH<0?'−':''}${fmt(r.sumCH)}</span></div>
+      ${r.sumBT>0?`<div class="rc-row"><span class="rc-lbl">非商责补贴</span><span class="rc-val">+${fmt(r.sumBT)}</span></div>`:''}
+      <div class="rc-row" style="font-weight:500;border-top:1px solid var(--border)"><span class="rc-lbl" style="color:var(--text)">销售金额</span><span class="rc-val">${fmt(r.salesTotal)}</span></div>
+      <div class="rc-row"><span class="rc-lbl">产品成本</span><span class="rc-val neg">−${fmt(r.productCost)}</span></div>
+      <div class="rc-gross"><span class="rc-gross-lbl">毛利润</span><div class="rc-gross-right"><span class="rc-rate">${r.margin.toFixed(1)}%</span><span class="rc-gross-val">${fmt(r.gross)}</span></div></div>
+    </div>`).join('');
+
+  document.getElementById('totalsBar').innerHTML = `
+    <div class="ti"><div class="ti-lbl">总订单</div><div class="ti-val">${totalOrders.toLocaleString()}</div></div>
+    <div class="ti"><div class="ti-lbl">总销售金额</div><div class="ti-val">${fmt(totalSales)}</div></div>
+    <div class="ti"><div class="ti-lbl">总产品成本</div><div class="ti-val neg">${fmt(totalCost)}</div></div>
+    <div class="ti"><div class="ti-lbl">总毛利润</div><div class="ti-val pos">${fmt(totalGross)}</div></div>
+    <div class="ti"><div class="ti-lbl">综合利润率</div><div class="ti-val pos">${totalMargin.toFixed(1)}%</div></div>`;
+
+  document.getElementById('f-gross').textContent      = fmt(totalGross);
+  document.getElementById('f-expense').textContent    = expense>0?'−'+fmt(expense):'¥0.00';
+  document.getElementById('f-refund-raw').textContent = fmt(totalRefundAmt);
+  document.getElementById('f-refund70').textContent   = '−'+fmt(totalReturnLoss);
+  document.getElementById('f-net').textContent        = fmt(totalNet);
+
+  const unmatchedEntries = Object.entries(allUnmatched);
+  if (unmatchedEntries.length) {
+    let addedCount = 0;
+    unmatchedEntries.forEach(([id, name]) => {
+      if (!costList.find(s => s.id === id)) {
+        costList.unshift({ id, name, cost: 0, pkg: 0, pending: true });
+        addedCount++;
+      }
+    });
+    if (addedCount > 0) saveCostList();
+    document.getElementById('unmatchedMsg').innerHTML =
+      `⚠️ 发现 ${unmatchedEntries.length} 个未知SKU（成本按 ¥0 计算，利润结果偏高）。已自动加入成本表，请填写成本后重新计算。` +
+      `<br><button onclick="showTab('cost')" style="margin-top:8px;padding:5px 14px;border:1px solid var(--amber);border-radius:6px;background:white;color:var(--amber);cursor:pointer;font-size:12px;font-family:var(--sans)">→ 去填写成本</button>`;
+    document.getElementById('unmatchedMsg').style.display = 'block';
+  } else {
+    hideMsg('unmatchedMsg');
+  }
+
+  if (totalSubsidy>0) showMsg('subsidyMsg','💡 非商责补贴 '+fmt(totalSubsidy)+' 已计入各区域销售金额。');
+  else hideMsg('subsidyMsg');
+
+  document.getElementById('results').style.display='block';
+  renderSummary(regionResults, costMap, totalSales, totalGross, totalOrders, totalRefundAmt, period);
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ══════════════════════════════════════════════
+// SALES SUMMARY
+// ══════════════════════════════════════════════
+function renderSummary(regionResults, costMap, totalSales, totalGross, totalOrders, totalRefund, period) {
+  // Build per-SKU data from all files
+  const skuMap = {};
+  files.filter(f=>f.status==='ok').forEach(file => {
+    file.rows.filter(r=>txType(r)==='销售回款').forEach(r => {
+      const k = skuKey(r['SKU ID']);
+      const qty = txQty(r);
+      const amt = txAmt(r);
+      const info = costMap[k];
+      const cost = info ? info.cost * qty : 0;
+      const name = (info && info.name) ? info.name : (r['SKU货号'] || k);
+      if (!skuMap[k]) skuMap[k] = { name, orders:0, qty:0, revenue:0, cost:0 };
+      skuMap[k].orders++;
+      skuMap[k].qty += qty;
+      skuMap[k].revenue += amt;
+      skuMap[k].cost += cost;
+    });
+  });
+  const skus = Object.values(skuMap).map(s=>({...s, profit:s.revenue-s.cost, margin:s.revenue>0?(s.revenue-s.cost)/s.revenue*100:0}));
+  const byProfit  = [...skus].sort((a,b)=>b.profit-a.profit).slice(0,10);
+  const byMargin  = [...skus].filter(s=>s.qty>=5).sort((a,b)=>b.margin-a.margin).slice(0,5);
+  const byVolume  = [...skus].sort((a,b)=>b.qty-a.qty).slice(0,5);
+
+  // Insights
+  const insights = [];
+  const topMarginSku = byMargin[0];
+  if (topMarginSku) insights.push(`<strong>${topMarginSku.name}</strong> 利润率最高达 <strong>${topMarginSku.margin.toFixed(1)}%</strong>，销量 ${topMarginSku.qty} 件，值得重点关注。`);
+  const topVolumeSku = byVolume[0];
+  if (topVolumeSku && topVolumeSku.margin < 30) insights.push(`<strong>${topVolumeSku.name}</strong> 销量最大（${topVolumeSku.qty} 件），但利润率仅 ${topVolumeSku.margin.toFixed(1)}%，主要靠走量。`);
+  const maxRefundRegion = regionResults.sort((a,b)=>b.refund-a.refund)[0];
+  if (maxRefundRegion && totalRefund > 0) insights.push(`<strong>${maxRefundRegion.flag} ${maxRefundRegion.region}</strong> 退款最高（${fmt(maxRefundRegion.refund)}），占总退款 ${(maxRefundRegion.refund/totalRefund*100).toFixed(0)}%，建议关注退货原因。`);
+  const highMarginLowVol = skus.filter(s=>s.margin>50&&s.qty<30).sort((a,b)=>b.margin-a.margin)[0];
+  if (highMarginLowVol) insights.push(`<strong>${highMarginLowVol.name}</strong> 利润率 ${highMarginLowVol.margin.toFixed(1)}% 但销量只有 ${highMarginLowVol.qty} 件，有潜力，可以考虑加大推广。`);
+
+  const maxRev = Math.max(...regionResults.map(r=>r.salesTotal));
+
+  const rankClass = i => i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-n';
+
+  document.getElementById('summaryPeriod').textContent = period;
+  document.getElementById('summaryContent').innerHTML = `
+    <div class="sum-metrics">
+      <div class="sum-metric"><div class="sum-metric-lbl">总结算收入</div><div class="sum-metric-val">${fmt(totalSales)}</div></div>
+      <div class="sum-metric"><div class="sum-metric-lbl">总毛利润</div><div class="sum-metric-val pos">${fmt(totalGross)}</div></div>
+      <div class="sum-metric"><div class="sum-metric-lbl">综合利润率</div><div class="sum-metric-val pos">${(totalSales>0?totalGross/totalSales*100:0).toFixed(1)}%</div></div>
+      <div class="sum-metric"><div class="sum-metric-lbl">总订单数</div><div class="sum-metric-val">${totalOrders.toLocaleString()}</div></div>
+      <div class="sum-metric"><div class="sum-metric-lbl">总退款</div><div class="sum-metric-val neg">${fmt(totalRefund)}</div></div>
+    </div>
+
+    <div class="sum-section-title">各区域收入对比</div>
+    <div style="margin-bottom:14px">
+      ${regionResults.map(r=>`
+        <div class="region-bar-row">
+          <div class="rbn">${r.flag} ${r.region}</div>
+          <div class="rbw"><div class="rbf" style="width:${(r.salesTotal/maxRev*100).toFixed(0)}%;background:${r.region==='美国'?'#185FA5':r.region==='欧区'?'#534AB7':'#0F6E56'}"></div></div>
+          <div class="rbs">${fmt(r.salesTotal)} · 利润${fmt(r.gross)} · ${r.margin.toFixed(1)}%</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="sum-section-title">利润最高产品 Top 10</div>
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+      <table class="sum-table">
+        <thead><tr><th style="width:38%">产品</th><th>销量</th><th>收入</th><th>毛利润</th><th>利润率</th></tr></thead>
+        <tbody>${byProfit.map((s,i)=>`
+          <tr>
+            <td><span class="rank-badge ${rankClass(i)}">${i+1}</span>${s.name||'—'}</td>
+            <td>${Math.round(s.qty)}</td>
+            <td>${fmt(s.revenue)}</td>
+            <td>${fmt(s.profit)}</td>
+            <td><span class="${s.margin>=40?'tag-high':s.margin>=25?'tag-pos':'tag-warn'}">${s.margin.toFixed(1)}%</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div class="sum-section-title">利润率最高（销量≥5件）</div>
+        <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden">
+          <table class="sum-table">
+            <thead><tr><th>产品</th><th>利润率</th><th>销量</th></tr></thead>
+            <tbody>${byMargin.map((s,i)=>`
+              <tr><td><span class="rank-badge ${rankClass(i)}">${i+1}</span>${s.name||'—'}</td>
+              <td><span class="${s.margin>=40?'tag-high':'tag-pos'}">${s.margin.toFixed(1)}%</span></td>
+              <td>${Math.round(s.qty)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="sum-section-title">销量最高</div>
+        <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);overflow:hidden">
+          <table class="sum-table">
+            <thead><tr><th>产品</th><th>销量</th><th>利润率</th></tr></thead>
+            <tbody>${byVolume.map((s,i)=>`
+              <tr><td><span class="rank-badge ${rankClass(i)}">${i+1}</span>${s.name||'—'}</td>
+              <td>${Math.round(s.qty)}</td>
+              <td><span class="${s.margin>=30?'tag-pos':'tag-warn'}">${s.margin.toFixed(1)}%</span></td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    ${insights.length ? `<div class="sum-section-title">值得关注</div>${insights.map(i=>`<div class="insight-row">${i}</div>`).join('')}` : ''}
+  `;
+  document.getElementById('summarySection').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════
+// COST EDITOR TAB
+// ══════════════════════════════════════════════
+function renderCostTable() {
+  const q = (document.getElementById('searchInput').value||'').toLowerCase();
+  const filtered = q ? costList.filter(s => s.id.includes(q) || (s.name||'').toLowerCase().includes(q)) : costList;
+  document.getElementById('costCount').textContent = `共 ${costList.length} 个SKU${q?' · 筛选出 '+filtered.length+' 个':''}`;
+  document.getElementById('costTableBody').innerHTML = filtered.map((s) => {
+    const realIdx = costList.indexOf(s);
+    const isPending = s.pending && s.cost === 0;
+    const rowBg = isPending ? 'background:#FFFBEB;' : '';
+    const badge = isPending ? '<span style="font-size:10px;background:#FEF08A;color:#854D0E;border-radius:4px;padding:1px 6px;margin-left:6px;font-family:var(--mono)">待填写</span>' : '';
+    const costStyle = isPending ? 'border-color:#FDE68A;background:#FFFBEB' : '';
+    return '<tr style="' + rowBg + '">' +
+      '<td class="td-id">' + s.id + badge + '</td>' +
+      '<td><input class="name-input" value="' + (s.name||'') + '" onchange="updateField(' + realIdx + ',\'name\',this.value)" placeholder="（未命名）"></td>' +
+      '<td><input class="inline-input" type="number" min="0" step="0.01" value="' + s.cost + '" style="' + costStyle + '" onchange="onCostChange(' + realIdx + ',+this.value)"></td>' +
+      '<td><input class="inline-input" type="number" min="0" step="0.01" value="' + s.pkg + '" onchange="updateField(' + realIdx + ',\'pkg\',+this.value)"></td>' +
+      '<td><button class="del-btn" onclick="deleteSku(' + realIdx + ')" title="删除">✕</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function onCostChange(idx, val) {
+  costList[idx].cost = val;
+  if (val > 0) costList[idx].pending = false;
+  saveCostList();
+  renderCostTable();
+  // Show prompt to recalculate
+  const n = costList.filter(s => s.pending && s.cost === 0).length;
+  if (n === 0) {
+    showMsg('costSuccess', '✓ 所有成本已填写完成！请回「计算利润」重新计算。');
+    document.getElementById('costSuccess').innerHTML += ' <button onclick="showTab(\'calc\')" style="margin-left:10px;padding:3px 12px;border:1px solid var(--accent);border-radius:6px;background:white;color:var(--accent);cursor:pointer;font-size:12px;font-family:var(--sans)">→ 去重新计算</button>';
+  } else {
+    showMsg('costSuccess', '✓ 已保存，还有 ' + n + ' 个SKU待填写成本。');
+    setTimeout(()=>hideMsg('costSuccess'), 2500);
+  }
+}
+
+function updateField(idx, field, val) {
+  costList[idx][field] = val;
+  saveCostList();
+}
+
+function deleteSku(idx) {
+  if (!confirm(`确认删除 SKU ${costList[idx].id}（${costList[idx].name||'未命名'}）？`)) return;
+  costList.splice(idx, 1);
+  saveCostList();
+  renderCostTable();
+}
+
+let addFormOpen = false;
+function toggleAddForm() {
+  addFormOpen = !addFormOpen;
+  document.getElementById('addForm').classList.toggle('open', addFormOpen);
+}
+
+function addSku() {
+  const id   = document.getElementById('add-id').value.trim();
+  const name = document.getElementById('add-name').value.trim();
+  const cost = parseFloat(document.getElementById('add-cost').value) || 0;
+  const pkg  = parseFloat(document.getElementById('add-pkg').value)  || 0;
+  if (!id) { showMsg('addError','SKU ID 不能为空'); return; }
+  if (costList.find(s => s.id === id)) { showMsg('addError','该 SKU ID 已存在，请直接在表格中修改'); return; }
+  costList.unshift({ id, name, cost, pkg });
+  saveCostList();
+  renderCostTable();
+  hideMsg('addError');
+  document.getElementById('add-id').value = '';
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-cost').value = '';
+  document.getElementById('add-pkg').value = '';
+  showMsg('costSuccess', `✓ 已添加 SKU ${id}${name?' ('+name+')':''}`);
+  setTimeout(()=>hideMsg('costSuccess'), 3000);
+}
+
+function resetToDefault() {
+  if (!confirm('确认恢复到默认成本表？所有手动修改都会丢失。')) return;
+  costList = JSON.parse(JSON.stringify(getDefaultList()));
+  saveCostList();
+  renderCostTable();
+  showMsg('costSuccess','✓ 已恢复默认成本表，正在同步到云端...');
+  setTimeout(()=>hideMsg('costSuccess'),3000);
+}
+
+async function forceReloadFromDefault() {
+  const shopName = currentShop === 'sk' ? 'SK' : 'OZ';
+  if (!confirm('确认将 ' + shopName + ' 的默认成本数据强制写入云端？这会覆盖云端现有数据。')) return;
+  showSaveStatus('正在强制写入云端...');
+  try {
+    const defaultList = getDefaultList();
+    await saveCostListData(defaultList);
+    costList = JSON.parse(JSON.stringify(defaultList));
+    renderCostTable();
+    showSaveStatus('✓ 已强制写入云端，共 ' + costList.length + ' 个SKU');
+    showMsg('costSuccess', '✓ ' + shopName + ' 云端数据已重置为默认值（' + costList.length + ' 个SKU）');
+    setTimeout(()=>hideMsg('costSuccess'), 4000);
+  } catch(e) {
+    showSaveStatus('✗ 写入失败：' + e.message);
+  }
+}
+
+function exportCostCSV() {
+  const rows = [['SKU ID','产品名称','采购成本','打包费用']].concat(costList.map(s=>[s.id,s.name,s.cost,s.pkg]));
+  const csv = rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='成本核对表_导出.csv'; a.click();
+}
+
+function showSaveStatus(msg) {
+  const el=document.getElementById('saveStatus'); el.textContent=msg;
+}
+
+// ── helpers ──
+function showMsg(id, txt) { const el=document.getElementById(id); el.textContent=txt; el.style.display='block'; }
+function hideMsg(id)       { document.getElementById(id).style.display='none'; }
+</script>
+</body>
+</html>
